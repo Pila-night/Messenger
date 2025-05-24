@@ -2,9 +2,15 @@ cmake_minimum_required(VERSION 3.16)
 
 project(Server VERSION 0.1 LANGUAGES CXX)
 
+
+
+
+
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
+
+include_directories(${PROJECT_SOURCE_DIR}/libs/crc)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +29,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(Server
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        protocol.h protocol.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET Server APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
