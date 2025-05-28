@@ -6,6 +6,7 @@
 #include <QIODevice>
 #include <CRC.h> // Библиотека с https://github.com/d-bahr/CRCpp
 #include <QDebug>
+#include "ByteBuffer.h"
 
 enum class PacketType : uint8_t {
     Register,
@@ -17,11 +18,11 @@ enum class PacketType : uint8_t {
 class Packet {
 protected:
 
-    virtual void serializeData(QDataStream& stream) const = 0;
-    virtual void deserializeData(QDataStream& stream) = 0;
+    virtual void serializeData(ByteBuffer& buffer) const = 0;
+    virtual void deserializeData(ByteBuffer& buffer) = 0;
 
-    static void serializeString(QDataStream& stream, const QString& str);
-    static QString deserializeString(QDataStream& stream);
+    static void serializeString(ByteBuffer& buffer, const QString& str);
+    static QString deserializeString(ByteBuffer& buffer);
 
 public:
 
@@ -32,55 +33,48 @@ public:
     virtual ~Packet() = default;
 
 private:
-    QByteArray crc(const QByteArray& data) const;
+    QByteArray crc(const ByteBuffer& buffer) const;
 };
 
 /*подсчет контрольной суммы.*/
-QByteArray Packet::crc(const QByteArray& data) const {
-    uint32_t crc = CRC::Calculate(data.constData(), data.size(), CRC::CRC_32());
-    QByteArray result;
-    QDataStream stream(&result, QIODeviceBase::WriteOnly);
-    stream << crc;
+QByteArray Packet::crc(const ByteBuffer& buffer) const {
+    uint32_t crc = CRC::Calculate(buffer.constData(), buffer.size(), CRC::CRC_32());
+    ByteBuffer result;
+    result.writeIntLE(crc);
     return result;
 }
 
 /*Получается пакет вида [Длина, которую необходимо прочитать][Тип][Длина][Данные][Длина][Данные][CRC]*/
 QByteArray Packet::serialize() const {
-    QByteArray data;
-    QDataStream stream(&data, QIODeviceBase::WriteOnly);
+    ByteBuffer buf;
+    buf.writeByte(static_cast<qint8>(getType()));
 
-    uint8_t type = static_cast<uint8_t>(getType());
-    stream << type;
 
     /*Получаем  [ТИП][Длина][Данные][Длина][Данные]*/
-    serializeData(stream);
+    serializeData(buf);
 
-    QByteArray CRC = crc(data);
+    QByteArray CRC  =  crc(buf);
+    buf.write(CRC);
+
     /*Теперь  [ТИП][Длина][Данные][Длина][Данные][CRC]*/
-    data.append(CRC);
+    ByteBuffer finalPacket;
+    finalPacket.writeIntLE(buf.length());
+    finalPacket.write(buf.readEnd());
 
-    QByteArray finalPacket;
-    QDataStream headerStream(&finalPacket, QIODeviceBase::WriteOnly);
-    uint32_t totalLength = static_cast<uint32_t>(data.size()); // Длина от типа + данные + CRC
-    headerStream << totalLength; // Записываем размер, который необходимо прочитать
-    finalPacket.append(data); // Добавляем данные
     return finalPacket;
 }
 
 
 
-void Packet::serializeString(QDataStream& stream, const QString& str) {
+void Packet::serializeString(ByteBuffer& buffer, const QString& str) {
     QByteArray utf_8 = str.toUtf8();
-    uint16_t length = static_cast<uint16_t>(utf_8.size());
-    stream << length; // Записываем длину строки
-    stream.writeRawData(utf_8.constData(), length); // Записываем сами данные
+    buffer.writeShortLE(utf_8.size()); //записываю длину строки
+    buffer.write(utf_8); // записываю саму строку
 }
 
-QString Packet::deserializeString(QDataStream& stream) {
-    uint16_t length;
-    stream >> length;
-    QByteArray data(length, '\0');
-    stream.readRawData(data.data(), length);
+QString Packet::deserializeString(ByteBuffer& buffer) {
+    qint16 length = buffer.readShortLE();
+    QByteArray data = buffer.read(length);
     return QString::fromUtf8(data);
 }
 
@@ -91,14 +85,14 @@ private:
     QString password;
 
 protected:
-    void serializeData(QDataStream& stream) const override {
-        serializeString(stream, username);
-        serializeString(stream, password);
+    void serializeData(ByteBuffer& buffer) const override {
+        serializeString(buffer, username);
+        serializeString(buffer, password);
     }
 
-    void deserializeData(QDataStream& stream) override {
-        username = deserializeString(stream);
-        password = deserializeString(stream);
+    void deserializeData(ByteBuffer& buffer) override {
+        username = deserializeString(buffer);
+        password = deserializeString(buffer);
     }
 
 public:
@@ -126,14 +120,14 @@ private:
     QString password;
 
 protected:
-    void serializeData(QDataStream& stream) const override {
-        serializeString(stream, username);
-        serializeString(stream, password);
+    void serializeData(ByteBuffer& buffer) const override {
+        serializeString(buffer, username);
+        serializeString(buffer, password);
     }
 
-    void deserializeData(QDataStream& stream) override {
-        username = deserializeString(stream);
-        password = deserializeString(stream);
+    void deserializeData(ByteBuffer& buffer) override {
+        username = deserializeString(buffer);
+        password = deserializeString(buffer);
     }
 
 public:
@@ -161,14 +155,14 @@ private:
     QString text;
 
 protected:
-    void serializeData(QDataStream& stream) const override {
-        serializeString(stream, from);
-        serializeString(stream, text);
+    void serializeData(ByteBuffer& buffer) const override {
+        serializeString(buffer, from);
+        serializeString(buffer, text);
     }
 
-    void deserializeData(QDataStream& stream) override {
-        from = deserializeString(stream);
-        text = deserializeString(stream);
+    void deserializeData(ByteBuffer& buffer) override {
+        from = deserializeString(buffer);
+        text = deserializeString(buffer);
     }
 
 public:
@@ -195,12 +189,12 @@ private:
     QString message;
 
 protected:
-    void serializeData(QDataStream& stream) const override {
-        serializeString(stream, message);
+    void serializeData(ByteBuffer& buffer) const override {
+        serializeString(buffer, message);
     }
 
-    void deserializeData(QDataStream& stream) override {
-        message = deserializeString(stream);
+    void deserializeData(ByteBuffer& buffer) override {
+        message = deserializeString(buffer);
     }
 
 public:
@@ -218,13 +212,12 @@ public:
 
 
 std::unique_ptr<Packet> Packet::deserialize(const QByteArray& data) {
-    QDataStream stream(data);
+    ByteBuffer buffer(data);
 
-    uint32_t totalLength;
-    stream >> totalLength;
+    qint32 totalLength = buffer.readIntLE();
 
-    uint8_t typeValue;
-    stream >> typeValue;
+    qint8 typeValue = buffer.readByte();
+
     PacketType type = static_cast<PacketType>(typeValue);
 
     std::unique_ptr<Packet> packet;
@@ -249,7 +242,7 @@ std::unique_ptr<Packet> Packet::deserialize(const QByteArray& data) {
     }
 
     if (packet) {
-        packet->deserializeData(stream);
+        packet->deserializeData(buffer);
     }
 
     return packet;
