@@ -32,10 +32,11 @@ public:
     virtual ~Packet() = default;
 
 private:
-    QByteArray crc(const ByteBuffer& buffer) const;
+    QByteArray  crcToByteArray(const ByteBuffer& buffer) const;
+    static uint32_t crcToInt32(const QByteArray& data);
 };
 
-class Register : public Packet {
+class PacketRegister : public Packet {
 private:
     QString username;
     QString password;
@@ -52,7 +53,7 @@ public:
     void setPassword(const QString &text);
 };
 
-class Auth : public Packet {
+class PacketAuth : public Packet {
 private:
     QString username;
     QString password;
@@ -69,7 +70,7 @@ public:
     void setPassword(const QString &text);
 };
 
-class Message : public Packet {
+class PacketMessage : public Packet {
 private:
     QString from;
     QString text;
@@ -86,7 +87,7 @@ public:
     void setText(const QString &str);
 };
 
-class ServerResponse : public Packet {
+class PacketServerResponse : public Packet {
 private:
     QString message;
 
@@ -100,7 +101,7 @@ public:
     void SetResponse(const QString &text);
 };
 
-class AuthChallenge : public Packet {
+class PacketAuthChallenge : public Packet {
 private:
     QString salt;
 
