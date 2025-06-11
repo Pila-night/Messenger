@@ -32,7 +32,8 @@ private:
     void handleAuthResponse(const ServerResponse &response);*/
     void sendFinalAuthHash();
 
-    QString hashPassword(const QString &password, const QString &salt);
+
+    QByteArray hashPassword(const QString &password, const QString &salt);
 };
 
 
