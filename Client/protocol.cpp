@@ -26,10 +26,8 @@ QByteArray Packet::serialize() const {
     /*Сериализуются данные, которые находятся в пакете (в зависимости от типа пакета разная сериализация)*/
     ByteBuffer data;
     serializeData(data);
-
     /*Вычисляется CRC от полезных данных */
     QByteArray CRC  =  crcToByteArray(data);
-
     /*Теперь  [ТИП][Длина][Данные][Длина][Данные][CRC]*/
     ByteBuffer finalPacket;
 
@@ -42,6 +40,7 @@ QByteArray Packet::serialize() const {
     /*Записываем CRC в пакет*/
     finalPacket.write(CRC);
 
+    qDebug() << "Полезные данные" << data;
     /*Записываем сами данные в пакет*/
     finalPacket.write(data);
     return finalPacket;
@@ -49,7 +48,8 @@ QByteArray Packet::serialize() const {
 
 void Packet::serializeString(ByteBuffer& buffer, const QString& str) {
     QByteArray utf8 = str.toUtf8();
-    buffer.writeShortLE(utf8.size());
+    qint16 size = utf8.size();
+    buffer.writeShortLE(size);
     buffer.write(utf8);
 }
 
@@ -61,18 +61,17 @@ QString Packet::deserializeString(ByteBuffer& buffer) {
 
 std::shared_ptr<Packet> Packet::deserialize(const QByteArray& data) {
     ByteBuffer buffer(data);
-
     /*Читаем тип пакета*/
     qint8 typeValue = buffer.readByte();
-
+    qDebug() <<"Тип пакета: " <<typeValue;
     /*Читаем размер полезных данных*/
     qint32 usefulDataLength = buffer.readIntLE();
-
+    qDebug() <<"Размер полезных данных: " <<usefulDataLength;
     /*Читаем CRC*/
     qint32 CRC = buffer.readIntLE();
-
     /*Читаем полезные данные*/
     QByteArray usefulData = buffer.read(usefulDataLength);
+    qDebug() <<"Сами полезные данные: " <<usefulData;
 
     /*пока без обработки ошибок*/
     if(usefulData.size() !=usefulDataLength )
@@ -80,28 +79,21 @@ std::shared_ptr<Packet> Packet::deserialize(const QByteArray& data) {
         qDebug() <<"Ошибка при чтении данных";
         return nullptr;
     }
-
     /*Высчитываем CRC от полезных данных
      чтобы выполнить сравнение с присланным CRC
     */
-
     qint32 calcCRC = crcToInt32(usefulData);
-
     /*пока без обработки ошибок*/
     if (calcCRC != CRC){
         qDebug() << "Не совпало CRC";
         return nullptr;
     }
-
+    qDebug() << "совпало CRC";
     PacketType type = static_cast<PacketType>(typeValue);
-
     std::shared_ptr<Packet> packet;
     switch (type) {
     case PacketType::Register:
         packet = std::make_shared<PacketRegister>();
-        break;
-    case PacketType::Auth:
-        packet = std::make_shared<PacketAuth>();
         break;
     case PacketType::Message:
         packet = std::make_shared<PacketMessage>();
@@ -109,12 +101,23 @@ std::shared_ptr<Packet> Packet::deserialize(const QByteArray& data) {
     case PacketType::ServerResponse:
         packet = std::make_shared<PacketServerResponse>();
         break;
+    case PacketType::Auth:
+        packet = std::make_shared<PacketAuth>();
+        break;
+    /*case PacketType::CreateChat:
+        packet = std::make_shared<PacketCreateChat>();
+        break;*/
+    case PacketType::ChatList :
+        packet = std::make_shared<PacketChatList>();
+        break;
     default:
         return nullptr;
     }
 
+
+    ByteBuffer usefulBuf(usefulData); /*содержит полезные данные*/
     if (packet) {
-        packet->deserializeData(buffer);
+        packet->deserializeData(usefulBuf);
     }
 
     return packet;
@@ -160,13 +163,17 @@ void PacketAuth::serializeData(ByteBuffer& buffer) const {
 }
 
 void PacketAuth::deserializeData(ByteBuffer& buffer) {
+    qDebug() << "стоп 2";
     username = Packet::deserializeString(buffer);
+    qDebug() << "стоп 2/1";
     password = Packet::deserializeString(buffer);
 }
 
 PacketType PacketAuth::getType() const {
     return PacketType::Auth;
 }
+
+
 
 QString PacketAuth::getUsername() const {
     return username;
@@ -189,11 +196,16 @@ void PacketAuth::setPassword(const QString &text) {
 void PacketMessage::serializeData(ByteBuffer& buffer) const {
     Packet::serializeString(buffer, from);
     Packet::serializeString(buffer, text);
+    Packet::serializeString(buffer, ChatName);
+    Packet::serializeString(buffer, timestamp.toString(Qt::ISODate));
 }
 
 void PacketMessage::deserializeData(ByteBuffer& buffer) {
     from = Packet::deserializeString(buffer);
     text = Packet::deserializeString(buffer);
+    ChatName = Packet::deserializeString(buffer);
+    QString tsStr = Packet::deserializeString(buffer);
+    timestamp = QDateTime::fromString(tsStr, Qt::ISODate);
 }
 
 PacketType PacketMessage::getType() const {
@@ -216,46 +228,129 @@ void PacketMessage::setText(const QString &str) {
     text = str;
 }
 
+QDateTime PacketMessage::getTimestamp() const {
+    return timestamp;
+}
+
+void PacketMessage::setTimestamp(const QDateTime &time) {
+    timestamp = time;
+}
+
+QString PacketMessage::getChatName() const {
+    return ChatName;
+}
+
+void PacketMessage::setChatName(const QString &name) {
+    ChatName = name;
+}
+
+
+
+
+
+
+
 // --- Реализация класса PacketServerResponse ---
 
-void PacketServerResponse::serializeData(ByteBuffer& buffer) const {
-    Packet::serializeString(buffer, message);
+void PacketServerResponse::serializeData(ByteBuffer& buffer) const  {
+    /*Записываем байт типа ответа*/
+    buffer.writeByte(static_cast<qint8>(ResponseType));
+    /*Записываем байт статуса ответа*/
+    buffer.writeByte(static_cast<qint8>(Status));
+
+    if (ResponseType == ServerResponseType::Auth && Status == ServerResponseStatus::Success){
+        Packet::serializeString(buffer, salt);
+    } else {
+        Packet::serializeString(buffer, message);
+
+    }
 }
 
 void PacketServerResponse::deserializeData(ByteBuffer& buffer) {
-    message = Packet::deserializeString(buffer);
+    /*читаем байт типа ответа*/
+    ResponseType = static_cast<ServerResponseType>(buffer.readByte());
+    /*читаем байт типа  статуса*/
+    Status = static_cast<ServerResponseStatus>(buffer.readByte());
+
+    if (ResponseType == ServerResponseType::Auth && Status == ServerResponseStatus::Success){
+        salt = Packet::deserializeString(buffer); //если у нас был запрос на авторизацию и сервер нашел пользователя в БД с таким Логином, то значит сервер сразу прислал и соль
+    }
+
+    else if(ResponseType == ServerResponseType::Register && Status == ServerResponseStatus::Success) {
+        RegisterStatus = true;
+    }
+
+    else {
+        message = Packet::deserializeString(buffer);
+    }
+}
+
+void PacketServerResponse::SetResponseType(const ServerResponseType& type) {
+    ResponseType = type;
+}
+
+PacketServerResponse::ServerResponseType PacketServerResponse::GetResponseType()  {
+    return ResponseType;
+}
+
+void PacketServerResponse::SetResponseStatus(const ServerResponseStatus& status) {
+    Status = status;
+}
+PacketServerResponse::ServerResponseStatus PacketServerResponse::GetResponseStatus()  {
+    return Status;
 }
 
 PacketType PacketServerResponse::getType() const {
     return PacketType::ServerResponse;
 }
 
-QString PacketServerResponse::getResponse() const {
+QString PacketServerResponse::getResponse() const{
     return message;
 }
-
-void PacketServerResponse::SetResponse(const QString &text) {
+bool PacketServerResponse::getRegisterStatus() const {
+    return RegisterStatus;
+}
+void PacketServerResponse::SetResponseMessage(const QString &text) {
     message = text;
 }
 
-// ---PacketAuthChalleng ---
 
-void PacketAuthChallenge::serializeData(ByteBuffer& buffer) const {
-    Packet::serializeString(buffer, salt);
+
+
+/************************************/
+
+
+
+/* Реализовать позже   / класс PacketCreateChat
+void PacketCreateChat::serializeData(ByteBuffer& buffer) const
+{
+    Packet::serializeString(buffer, nameChat);
 }
 
-void PacketAuthChallenge::deserializeData(ByteBuffer& buffer) {
-    salt = Packet::deserializeString(buffer);
+void PacketCreateChat::deserializeData(ByteBuffer& buffer) const
+{
+    nameChat = Packet::deserializeString(buffer);
+}
+*/
+
+// --- PacketChatList ---
+
+void PacketChatList::serializeData(ByteBuffer& buffer) const
+{
+    buffer.writeShortLE(chatNames.size());
+    qDebug() << "Размер: "<< chatNames.size();
+    for (const QString& name : chatNames) {
+        qDebug() << "Имя того, что сейчас сереализую" << name ;
+        Packet::serializeString(buffer, name);
+    }
 }
 
-PacketType PacketAuthChallenge::getType() const {
-    return PacketType::AuthChallenge;
+void PacketChatList::deserializeData(ByteBuffer& buffer)
+{
+    qint16 count = buffer.readShortLE();
+    chatNames.clear();
+    for (int i = 0; i < count; ++i) {
+        chatNames.append(Packet::deserializeString(buffer));
+    }
 }
 
-QString PacketAuthChallenge::getSalt() const {
-    return salt;
-}
-
-void PacketAuthChallenge::setSalt(const QString &s) {
-    salt = s;
-}

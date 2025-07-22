@@ -7,13 +7,28 @@
 #include <QString>
 #include <CRC.h> // Библиотека с https://github.com/d-bahr/CRCpp
 #include "ByteBuffer.h"
+#include <QStringList>
+#include <QDateTime>
 
-enum class PacketType : uint8_t {
-    Register,
-    Auth,
-    Message,
-    ServerResponse,
-    AuthChallenge
+
+
+//class PacketHandler; //Сделано для избежания циклического включения
+
+enum class PacketType : qint8 {
+    /*Аутентификация и идентификация*/
+
+    Register, /*регистрация нового пользователя*/
+    Auth, /* аутентификация нового пользоватпеля*/
+
+    /********************************/
+
+    ServerResponse, /*ответ сервера*/
+
+    /*Типы пакетов, связанные с чатами*/
+    CreateChat, /*создать чат*/
+    ChatList, /*получить список чатов*/
+    Message, /*сообщение в чат*/
+    /**********************************/
 };
 
 class Packet {
@@ -30,6 +45,8 @@ public:
 
     virtual PacketType getType() const = 0;
     virtual ~Packet() = default;
+
+    /*virtual void execute(PacketHandler& nandler);*/ //для PacketHandler
 
 private:
     QByteArray  crcToByteArray(const ByteBuffer& buffer) const;
@@ -70,10 +87,17 @@ public:
     void setPassword(const QString &text);
 };
 
+
+
+
+
 class PacketMessage : public Packet {
 private:
     QString from;
     QString text;
+    QDateTime timestamp;
+    QString ChatName;
+
 
 protected:
     void serializeData(ByteBuffer& buffer) const override;
@@ -81,36 +105,105 @@ protected:
 
 public:
     PacketType getType() const override;
+
     QString getFrom() const;
     void setFrom(const QString &text);
+
     QString getText() const;
     void setText(const QString &str);
+
+    QDateTime getTimestamp() const;
+    void setTimestamp(const QDateTime &time);
+
+    QString getChatName() const;
+    void setChatName(const QString &name);
+
 };
+
+class PacketCreateChat : public Packet {
+private:
+    QString nameChat;
+
+public:
+    void serializeData(ByteBuffer& buffer) const override;
+    void deserializeData(ByteBuffer& buffer) const;
+
+    PacketType getType() const override
+    {
+        return PacketType::CreateChat;
+    }
+
+    QString getChatName() const {
+        return nameChat;
+    }
+
+    void setChatName(const QString& name) {
+        nameChat = name;
+    }
+
+};
+
+class PacketChatList : public Packet {
+private:
+    QStringList chatNames;
+
+public:
+    void serializeData(ByteBuffer& buffer) const override;
+    void deserializeData(ByteBuffer& buffer) override;
+    PacketType getType() const override { return PacketType::ChatList; }
+
+    const QStringList& getChatNames() const { return chatNames; }
+    void setChatNames(const QStringList& names) { chatNames.append(names); }
+
+};
+
+
+
+
+
+
+
 
 class PacketServerResponse : public Packet {
+
+protected:
+    void serializeData(ByteBuffer& buffer) const override;
+    void deserializeData(ByteBuffer& buffer) override;
+
+public:
+;
+
+    enum class ServerResponseType : qint8{
+        Auth,
+        Register
+    };
+
+    enum class ServerResponseStatus : qint8{
+        Success,
+        SuccessUsername,
+        Failed,
+    };
+
+    PacketType getType() const override;
+    QString  getResponse() const;
+    void SetResponseMessage(const QString &text);
+
+    void SetResponseType(const ServerResponseType & type);
+    ServerResponseType GetResponseType();
+
+    void SetResponseStatus(const ServerResponseStatus& status);
+    ServerResponseStatus GetResponseStatus();
+
+    void SetSalt(const QString& solt){salt = solt;}
+    QString const GetSalt(){return salt;}
+
+    bool  getRegisterStatus() const;
+
 private:
     QString message;
-
-protected:
-    void serializeData(ByteBuffer& buffer) const override;
-    void deserializeData(ByteBuffer& buffer) override;
-
-public:
-    PacketType getType() const override;
-    QString getResponse() const;
-    void SetResponse(const QString &text);
-};
-
-class PacketAuthChallenge : public Packet {
-private:
     QString salt;
-
-protected:
-    void serializeData(ByteBuffer& buffer) const override;
-    void deserializeData(ByteBuffer& buffer) override;
-
-public:
-    PacketType getType() const override;
-    QString getSalt() const;
-    void setSalt(const QString &s);
+    bool RegisterStatus = false;
+    ServerResponseStatus Status;
+    ServerResponseType ResponseType;
 };
+
