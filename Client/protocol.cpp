@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "packethandler.h"
 #include "ByteBuffer.h"
 #include <QDebug>
 
@@ -155,6 +156,12 @@ void PacketRegister::setPassword(const QString &text) {
     password = text;
 }
 
+void PacketRegister::handle(PacketHandler* handler) {
+    if (handler) {
+        handler->handle(*this);
+    }
+}
+
 // --- Реализация класса PacketAuth ---
 
 void PacketAuth::serializeData(ByteBuffer& buffer) const {
@@ -190,6 +197,12 @@ QString PacketAuth::getPassword() const {
 void PacketAuth::setPassword(const QString &text) {
     password = text;
 }
+/*void PacketRegister::handle(PacketHandler* handler) {
+    if (handler) {
+        handler->handle(*this);
+    }
+}
+*/
 
 // --- Реализация класса PacketMessage ---
 
@@ -244,6 +257,11 @@ void PacketMessage::setChatName(const QString &name) {
     ChatName = name;
 }
 
+void PacketMessage::handle(PacketHandler* handler) {
+    if (handler) {
+        handler->handle(*this);
+    }
+}
 
 
 
@@ -314,8 +332,11 @@ void PacketServerResponse::SetResponseMessage(const QString &text) {
     message = text;
 }
 
-
-
+/*void PacketMessage::handle(PacketHandler* handler) {
+    if (handler) {
+        handler->handle(*this);
+    }
+}*/
 
 /************************************/
 
@@ -354,3 +375,8 @@ void PacketChatList::deserializeData(ByteBuffer& buffer)
     }
 }
 
+/*void PacketMessage::handle(PacketHandler* handler) {
+    if (handler) {
+        handler->handle(*this);
+    }
+}*/

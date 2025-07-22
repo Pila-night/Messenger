@@ -12,7 +12,7 @@
 
 
 
-//class PacketHandler; //Сделано для избежания циклического включения
+class PacketHandler;
 
 enum class PacketType : qint8 {
     /*Аутентификация и идентификация*/
@@ -46,7 +46,7 @@ public:
     virtual PacketType getType() const = 0;
     virtual ~Packet() = default;
 
-    /*virtual void execute(PacketHandler& nandler);*/ //для PacketHandler
+    virtual void handle(PacketHandler* handler);
 
 private:
     QByteArray  crcToByteArray(const ByteBuffer& buffer) const;
@@ -63,6 +63,7 @@ protected:
     void deserializeData(ByteBuffer& buffer) override;
 
 public:
+    void handle(PacketHandler* handler) override;
     PacketType getType() const override;
     QString getUsername() const;
     void setUsername(const QString &text);
@@ -80,6 +81,7 @@ protected:
     void deserializeData(ByteBuffer& buffer) override;
 
 public:
+    void handle(PacketHandler* handler) override;
     PacketType getType() const override;
     QString getUsername() const;
     void setUsername(const QString &text);
@@ -104,6 +106,7 @@ protected:
     void deserializeData(ByteBuffer& buffer) override;
 
 public:
+    void handle(PacketHandler* handler) override;
     PacketType getType() const override;
 
     QString getFrom() const;
@@ -125,6 +128,7 @@ private:
     QString nameChat;
 
 public:
+    void handle(PacketHandler* handler) override;
     void serializeData(ByteBuffer& buffer) const override;
     void deserializeData(ByteBuffer& buffer) const;
 
@@ -148,6 +152,7 @@ private:
     QStringList chatNames;
 
 public:
+    void handle(PacketHandler* handler) override;
     void serializeData(ByteBuffer& buffer) const override;
     void deserializeData(ByteBuffer& buffer) override;
     PacketType getType() const override { return PacketType::ChatList; }
@@ -171,8 +176,8 @@ protected:
     void deserializeData(ByteBuffer& buffer) override;
 
 public:
-;
 
+    void handle(PacketHandler* handler) override;
     enum class ServerResponseType : qint8{
         Auth,
         Register
