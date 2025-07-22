@@ -1,39 +1,46 @@
 #pragma once
 
 #include <QObject>
-#include "managernetwork.h"
-#include "protocol.h"
 #include <QCryptographicHash>
+
+
+
+/*
+ *
+ *
+ * Переделать
+ *
+ *
+ */
+
 
 class AuthManager : public QObject
 {
     Q_OBJECT
 public:
-    explicit AuthManager(ManagerNetwork *managerNetwork, QObject *parent = nullptr);
-    void registerUser(const QString &username, const QString &password);
-    void authUser(const QString &username, const QString &password);
-
+    AuthManager(QObject *parent = nullptr);
+   /* void registerUser(const QString &username, const QString &password);
+    void authUser(const QString &username, const QString &password);*/
+    QString getHashPassword(const QString &password, const QString &salt);
 signals:
     void okRegisterUser();
     void okAuthUser();
     void authFail(const QString &mes);
 
 private slots:
-    void handlePacketReceived(std::shared_ptr<Packet> packet);
+    /*void handlePacketReceived(std::shared_ptr<Packet> packet);*/
 
 private:
-    ManagerNetwork *m_managerNetwork;
-    QString currentUsername;
+  /*  QString currentUsername;
     QString currentPassword;
-    QString salt;
-    bool waitingForSalt = false;
+    QString salt;*/
+    //bool waitingForSalt = false;
 
     /*void handleRegistrationResponse(const ServerResponse &response);
     void handleAuthResponse(const ServerResponse &response);*/
-    void sendFinalAuthHash();
+    //void sendFinalAuthHash();
 
-
-    QByteArray hashPassword(const QString &password, const QString &salt);
+    QString hashPassword(const QString &password, const QString &salt);
 };
 
 
