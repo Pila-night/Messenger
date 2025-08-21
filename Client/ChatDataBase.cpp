@@ -103,7 +103,7 @@ QList<QMap<QString, QString>> ChatDatabase::getMessages(const QString& chatName)
     QList<QMap<QString, QString>> messages;
 
     QSqlQuery query(db);
-    query.prepare("SELECT sender, text, timestamp FROM messages WHERE chat_name = ? ORDER BY timestamp ASC");
+    query.prepare("SELECT sender, text, timestamp, firstName, lastName FROM messages WHERE chat_name = ? ORDER BY timestamp ASC");
     query.addBindValue(chatName);
 
     Logger& logger = Logger::getInstance();
@@ -118,6 +118,8 @@ QList<QMap<QString, QString>> ChatDatabase::getMessages(const QString& chatName)
         message["sender"] = query.value(0).toString();
         message["text"] = query.value(1).toString();
         message["timestamp"] = query.value(2).toString();
+        message["firstName"] = query.value(3).toString();
+        message["lastName"] = query.value(4).toString();
         messages.append(message);
     }
 
