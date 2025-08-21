@@ -34,7 +34,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         ByteBuffer.cpp
         exception/ParsingException.h
         managernetwork.h managernetwork.cpp
-        AuthManager.h AuthManager.cpp
+
         packethandler.h packethandler.cpp
         logger.h logger.cpp
         Packetrouter.h Packetrouter.cpp
@@ -42,6 +42,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         Message.h Message.cpp
         ChatDataBase.h ChatDataBase.cpp
         ChatManager.h ChatManager.cpp
+        SecurityUtils.h SecurityUtils.cpp
 
     )
 # Define target properties for Android with Qt 6 as:

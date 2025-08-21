@@ -1,6 +1,5 @@
 #ifndef PACKETROUTER_H
 #define PACKETROUTER_H
-#include <QDebug>
 #include <QObject>
 #include "protocol.h"
 #include "packethandler.h"
@@ -13,11 +12,7 @@ public:
 
     void registerHandler(PacketHandler* handler);
     void routePacket(const QByteArray& data);
-/*
-signals:
-    void deserializationError(const QString& message); а надо ли оно? подумать об этом
-    void unknownPacketType(int packetType);
-*/
+    ~PacketRouter() override;
 private:
     QList<PacketHandler*> handlers;
 };

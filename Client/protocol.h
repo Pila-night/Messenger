@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <QByteArray>
 #include <QIODevice>
@@ -46,7 +45,9 @@ public:
     virtual PacketType getType() const = 0;
     virtual ~Packet() = default;
 
-    virtual void handle(PacketHandler* handler);
+    virtual void handle(PacketHandler* handler) = 0;
+
+
 
 private:
     QByteArray  crcToByteArray(const ByteBuffer& buffer) const;
@@ -57,6 +58,8 @@ class PacketRegister : public Packet {
 private:
     QString username;
     QString password;
+    QString first_name;
+    QString last_name;
 
 protected:
     void serializeData(ByteBuffer& buffer) const override;
@@ -65,10 +68,20 @@ protected:
 public:
     void handle(PacketHandler* handler) override;
     PacketType getType() const override;
+
     QString getUsername() const;
     void setUsername(const QString &text);
+
     QString getPassword() const;
     void setPassword(const QString &text);
+
+    QString getFirst_name() const;
+    void setFirst_name(const QString &text);
+
+    QString getLast_name() const;
+    void setLast_name(const QString &text);
+
+
 };
 
 class PacketAuth : public Packet {
@@ -95,6 +108,8 @@ public:
 
 class PacketMessage : public Packet {
 private:
+    QString firstName;
+    QString lastName;
     QString from;
     QString text;
     QDateTime timestamp;
@@ -108,6 +123,12 @@ protected:
 public:
     void handle(PacketHandler* handler) override;
     PacketType getType() const override;
+
+    QString getFirstName() const;
+    void setFirstName(const QString &firstName);
+
+    QString getLastName() const;
+    void setLastName(const QString &lastName);
 
     QString getFrom() const;
     void setFrom(const QString &text);

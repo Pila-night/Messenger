@@ -1,118 +1,150 @@
 #ifndef PACKETHANDLER_H
 #define PACKETHANDLER_H
 
-#include <QDebug>
 #include <QObject>
 #include "protocol.h"
 
-
-
-/*
- Если надумаю делать создание чатов с помощью прав администратора
-то не забыть доделать обработку пакетов для PacketCreateChat
-*/
-
+/**
+ * @brief Базовый класс PacketHandler.
+ * Предоставляет интерфейс для обработки различных типов пакетов.
+ */
 class PacketHandler {
 public:
     virtual ~PacketHandler() = default;
 
-    virtual void handle(PacketRegister &packet) = 0;
-    virtual void handle(PacketMessage &packet) = 0;
-    virtual void handle(PacketServerResponse &packet) = 0;
+    /**
+     * @brief Обрабатывает пакет регистрации.
+     * @param packet Пакет регистрации.
+     */
+    virtual void handle(PacketRegister& packet) = 0;
+
+    /**
+     * @brief Обрабатывает пакет сообщения.
+     * @param packet Пакет сообщения.
+     */
+    virtual void handle(PacketMessage& packet) = 0;
+
+    /**
+     * @brief Обрабатывает пакет ответа сервера.
+     * @param packet Пакет ответа сервера.
+     */
+    virtual void handle(PacketServerResponse& packet) = 0;
+
+    /**
+     * @brief Обрабатывает пакет списка чатов.
+     * @param packet Пакет списка чатов.
+     */
     virtual void handle(PacketChatList& packet) = 0;
 
+    /**
+     * @brief Обрабатывает пакет авторизации.
+     * @param packet Пакет авторизации.
+     */
+    virtual void handle(PacketAuth& packet) = 0;
+
 private:
-    QString salt;
+    QString salt; /*Соль для авторизации*/
 };
 
+/**
+ * @brief Класс PacketServerResponseHandler.
+ * Обрабатывает пакеты ответа сервера (авторизация, регистрация).
+ */
 class PacketServerResponseHandler : public QObject, public PacketHandler {
     Q_OBJECT
 
 public:
-    PacketServerResponseHandler(QObject *parent = nullptr) : QObject(parent) {}
+    explicit PacketServerResponseHandler(QObject* parent = nullptr);
 
-    void handle(PacketRegister& packet) override {}
-    void handle(PacketMessage& packet) override {}
-    void handle(PacketChatList& packet) override{}
-    void handle(PacketServerResponse& packet) override {
-        if (packet.GetResponseType() == PacketServerResponse::ServerResponseType::Auth) {
-            switch (packet.GetResponseStatus()) {
-            case PacketServerResponse::ServerResponseStatus::Success:
-                emit authSuccess();
-                break;
-            case PacketServerResponse::ServerResponseStatus::SuccessUsername:
-                emit authSaltReceived(packet.GetSalt());
-                break;
-            case PacketServerResponse::ServerResponseStatus::Failed:
-                emit authFailed(packet.getResponse());
-                break;
-            default:
-                emit authFailed("Получен неизвестный статус авторизации");
-                break;
-            }
-        }
-
-        if (packet.GetResponseType() == PacketServerResponse::ServerResponseType::Register) {
-            if (packet.getRegisterStatus()) {
-                emit RegisterSuccess();
-            } else {
-                emit RegisterFailed();
-            }
-        }
-    }
+    void handle(PacketAuth& packet) override;
+    void handle(PacketRegister& packet) override;
+    void handle(PacketMessage& packet) override;
+    void handle(PacketChatList& packet) override;
+    void handle(PacketServerResponse& packet) override;
 
 signals:
+    /**
+     * @brief Сигнал отправляется при получении соли для авторизации.
+     * @param salt Соль для авторизации.
+     */
     void authSaltReceived(const QString& salt);
+
+    /**
+     * @brief Сигнал отправляется при неудачной авторизации.
+     * @param message Сообщение об ошибке.
+     */
     void authFailed(const QString& message);
+
+    /**
+     * @brief Сигнал отправляется при успешной авторизации.
+     */
     void authSuccess();
+
+    /**
+     * @brief Сигнал отправляется при успешной регистрации.
+     */
     void RegisterSuccess();
-    void RegisterFailed();
+
+    /**
+     * @brief Сигнал отправляется при неудачной регистрации.
+     * @param message Сообщение об ошибке.
+     */
+    void RegisterFailed(const QString& message);
 };
 
+/**
+ * @brief Класс PacketMessageHandler.
+ * Обрабатывает пакеты сообщений.
+ */
 class PacketMessageHandler : public QObject, public PacketHandler {
     Q_OBJECT
 
 public:
-    PacketMessageHandler(QObject* parent = nullptr)
-                        : QObject(parent) {}
+    explicit PacketMessageHandler(QObject* parent = nullptr);
 
-    void handle(PacketRegister& packet) override {}
-    void handle(PacketServerResponse& packet) override {}
-    void handle(PacketChatList& packet) override{}
-
-
-    void handle(PacketMessage& packet) override {
-        QString chatName = packet.getChatName();
-        QString sender = packet.getFrom();
-        QString text = packet.getText();
-        QDateTime timestamp = packet.getTimestamp();
-        emit messageReceived(chatName, sender, text, timestamp);
-    }
+    void handle(PacketAuth& packet) override;
+    void handle(PacketRegister& packet) override;
+    void handle(PacketServerResponse& packet) override;
+    void handle(PacketChatList& packet) override;
+    void handle(PacketMessage& packet) override;
 
 signals:
-    void messageReceived(const QString& chatName, const QString& sender, const QString& text, const QDateTime& timestamp);
+    /**
+     * @brief Сигнал отправляется при получении нового сообщения.
+     * @param firstName Имя отправителя.
+     * @param lastName Фамилия отправителя.
+     * @param chatName Имя чата.
+     * @param sender Отправитель.
+     * @param text Текст сообщения.
+     * @param timestamp Временная метка.
+     */
+    void messageReceived(const QString& firstName, const QString& lastName,
+                         const QString& chatName, const QString& sender,
+                         const QString& text, const QDateTime& timestamp);
 };
 
-
+/**
+ * @brief Класс PacketChatListHandler.
+ * Обрабатывает пакеты списка чатов.
+ */
 class PacketChatListHandler : public QObject, public PacketHandler {
     Q_OBJECT
 
 public:
-    PacketChatListHandler(QObject* parent = nullptr)
-                         : QObject(parent) {}
+    explicit PacketChatListHandler(QObject* parent = nullptr);
 
-    void handle(PacketRegister& packet) override {}
-    void handle(PacketMessage& packet) override {}
-    void handle(PacketServerResponse& packet) override {}
-    void handle(PacketChatList& packet) override{
-        QStringList chatList = packet.getChatNames();
-        emit chatListReceived(chatList);
-};
+    void handle(PacketAuth& packet) override;
+    void handle(PacketRegister& packet) override;
+    void handle(PacketMessage& packet) override;
+    void handle(PacketServerResponse& packet) override;
+    void handle(PacketChatList& packet) override;
 
 signals:
+    /**
+     * @brief Сигнал отправляется при получении списка чатов.
+     * @param chatList Список имен чатов.
+     */
     void chatListReceived(const QStringList& chatList);
 };
-
-
 
 #endif // PACKETHANDLER_H

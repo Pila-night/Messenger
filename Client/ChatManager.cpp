@@ -1,69 +1,87 @@
 #include "ChatManager.h"
+#include <QSqlQuery>
+#include "logger.h"
 
 /**
-     * @brief Конструктор класса ChatManager.
-     * @param listModel Модель для отображения списка чатов.
-     */
-ChatManager::ChatManager(QStandardItemModel* listModel, QObject* parent)
-    : QObject(parent), model(listModel) {
-    database = new ChatDatabase(this);
-    if (!database->open("chats.db")) {
-        qWarning() << "Не удалось открыть базу данных.";
+ * @brief Конструктор класса ChatManager.
+ * Инициализирует менеджер чатов и загружает существующие чаты из базы данных.
+ * @param dbPath Путь к базе данных.
+ * @param parent Родительский объект.
+ */
+ChatManager::ChatManager(const QString& dbPath, QObject* parent)
+    : QObject(parent), model(this) {
+    Logger& logger = Logger::getInstance();
+    if (!database.open(dbPath)) {
+        logger.log(QtCriticalMsg, "Не удалось открыть базу данных чатов");
+        return;
+    }
+    QStringList chatNames = database.getAllChatNames();
+    for (const QString& name : chatNames) {
+        loadChat(name);
     }
 }
 
 /**
- * @brief createChat - создает новый чат.
- * Если чат с таким именем уже существует, он не будет создан повторно.
+ * @brief Создает новый чат и добавляет его в базу данных.
  * @param name Имя нового чата.
  */
 void ChatManager::createChat(const QString& name) {
     if (!chats.contains(name)) {
-        chats[name] = std::make_shared<Chat>(name);
+        chats.insert(name, Chat(name));
         auto* item = new QStandardItem(name);
-        model->appendRow(item);
-
-        QList<QMap<QString, QString>> messages = database->getMessages(name);
-        for (const auto& msg : messages) {
-            QDateTime timestamp = QDateTime::fromString(msg["timestamp"], Qt::ISODate);
-            chats[name]->addMessage(msg["sender"], msg["text"], timestamp);
-        }
+        model.appendRow(item);
+        database.addChat(name);
     }
 }
 
 /**
- * @brief getChat - возвращает объект чата по его имени.
+ * @brief Возвращает указатель на чат по имени.
  * @param name Имя чата.
- * @return Указатель на объект чата или nullptr, если чат не найден.
- *
+ * @return Указатель на чат или nullptr, если чат не найден.
  */
-std::shared_ptr<Chat> ChatManager::getChat(const QString& name) {
-    return chats.value(name);
+Chat* ChatManager::getChat(const QString& name) {
+    QMap<QString, Chat>::iterator it = chats.find(name);
+    if (it != chats.end()) {
+        return &it.value();
+    }
+    return nullptr;
 }
 
 /**
- * @brief addMessageToChat - добавляет новое сообщение в указанный чат.
- * Сообщение также сохраняется в базе данных.
+ * @brief Добавляет сообщение в указанный чат.
  * @param chatName Имя чата.
  * @param sender Отправитель сообщения.
  * @param text Текст сообщения.
- * @param timestamp Временная метка сообщения.
+ * @param timestamp Временная метка.
+ * @param firstName Имя отправителя.
+ * @param lastName Фамилия отправителя.
  */
-void ChatManager::addMessageToChat(const QString& chatName, const QString& sender, const QString& text, const QDateTime& timestamp) {
-    auto chat = getChat(chatName);
+void ChatManager::addMessageToChat(const QString& chatName, const QString& sender, const QString& text,
+                                   const QDateTime& timestamp, const QString& firstName, const QString& lastName) {
+    Chat* chat = getChat(chatName);
     if (chat) {
-        chat->addMessage(sender, text, timestamp);
-
-        database->addMessage(chatName, sender, text, timestamp);
-
+        chat->addMessage(sender, text, timestamp, firstName, lastName);
+        database.addMessage(chatName, sender, text, timestamp, firstName, lastName);
         emit chatUpdated(chatName);
     }
 }
 
 /**
- * @brief ChatManager::getAllChatNames - возвращает список имен всех чатов.
- * @return Список имен чатов.
+ * @brief Загружает чат из базы данных.
+ * @param name Имя чата.
  */
-QStringList ChatManager::getAllChatNames() const {
-    return chats.keys();
+void ChatManager::loadChat(const QString& name) {
+    if (!chats.contains(name)) {
+        Chat chat(name);
+        QList<QMap<QString, QString>> messages = database.getMessages(name);
+        for (const auto& msg : messages) {
+            QDateTime timestamp = QDateTime::fromString(msg["timestamp"], Qt::ISODate);
+            chat.addMessage(msg["sender"], msg["text"], timestamp, msg["firstName"], msg["lastName"]);
+        }
+
+        chats.insert(name, chat);
+        auto* item = new QStandardItem(name);
+        model.appendRow(item);
+    }
 }
+

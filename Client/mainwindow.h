@@ -2,7 +2,6 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include "AuthManager.h"
 #include "managernetwork.h"
 #include "ChatManager.h"
 #include <QItemSelectionModel>
@@ -45,6 +44,7 @@ private slots:
     void handleSuccessfulRegistration();
 
     void handleRegistrationFailure();
+    void handleRegisterFailed(const QString &message);
 
     void on_SaltReceived(const QString &salt);
 
@@ -53,10 +53,11 @@ private slots:
     void loadChatHistory(const QString& chatName);
     void on_ChatList_clicked(const QModelIndex& index);
     void on_SendMessageButton_clicked();
-    void onMessageReceived(const QString& chatName, const QString& sender, const QString& text, const QDateTime& timestamp);
+    void onMessageReceived(const QString& firstName,const QString& lastName, const QString& chatName, const QString& sender, const QString& text, const QDateTime& timestamp);
     void onChatListReceived(const QStringList& chatList);
 
     void onDataReceived(const QByteArray& data);
+    void closeEvent(QCloseEvent *event);
 private:
     QString username;
     QString currentChatName;
@@ -64,10 +65,8 @@ private:
     QStandardItemModel* chatListModel;
     Ui::MainWindow *ui;
     ManagerNetwork *managerNetwork;
-    AuthManager *authManager;
     ChatManager* chatManager;
     PacketRouter* packetRouter;
-  // messageHandler;*/
 
 };
 #endif // MAINWINDOW_H

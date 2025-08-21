@@ -28,6 +28,7 @@ private:
     Logger();
 
 public:
+    void createLogFile();
     static Logger& getInstance();
     void setLogFile(const QString& filename);
     void open();

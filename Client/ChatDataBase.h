@@ -8,7 +8,7 @@
 /**
  * @brief ChatDatabase - класс для работы с базой данных чатов.
  *
- * Этот класс предоставляет методы для открытия базы данных, добавления сообщений
+ * предоставляет методы для открытия базы данных, добавления сообщений
  * и получения сообщений из базы данных SQLite.
  */
 
@@ -24,9 +24,15 @@ public:
     ~ChatDatabase();
 
     bool open(const QString& path);
+    bool isOpen() const;
     void close();
+    QStringList getAllChatNames();
 
-    void addMessage(const QString& chatName, const QString& sender, const QString& text, const QDateTime& timestamp);
+    void addChat(const QString& chatName);
+    bool deleteChat(const QString& chatName);
+
+    void addMessage(const QString& chatName, const QString& sender, const QString& text,
+                    const QDateTime& timestamp, const QString& firstName, const QString& lastName);
     QList<QMap<QString, QString>> getMessages(const QString& chatName);  // Получить все сообщения чата
 };
 

@@ -128,8 +128,38 @@ QString Logger::getLogFile() const {
 }
 
 /**
+ * @brief Создает файл для записии логов.
+ */
+void Logger::createLogFile() {
+    if (currentFile.isEmpty()) {
+        qCritical() << "Путь к журналу событий не задан.";
+        return;
+    }
+
+    QFileInfo fileInfo(currentFile);
+    QDir dir = fileInfo.dir();
+
+    if (!dir.exists()) {
+        if (!dir.mkpath(".")) {
+            qCritical() << "Не удалось создать директорию для файла логов:" << dir.path();
+            return;
+        }
+    }
+    if (!fileInfo.exists()) {
+        QFile file(currentFile);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            qCritical() << "Не удалось создать файл логов:" << currentFile;
+            return;
+        }
+        file.close();
+    } else {
+        qDebug() << "Файл логов уже существует:" << currentFile;
+    }
+}
+
+/**
  * @brief Деструктор класса Logger.
- * @details Закрывает файл логов при уничтожении объекта.
+ * @details Закрывает файл.
  */
 Logger::~Logger() {
     close();

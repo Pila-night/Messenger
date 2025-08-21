@@ -41,7 +41,6 @@ QByteArray Packet::serialize() const {
     /*Записываем CRC в пакет*/
     finalPacket.write(CRC);
 
-    qDebug() << "Полезные данные" << data;
     /*Записываем сами данные в пакет*/
     finalPacket.write(data);
     return finalPacket;
@@ -60,19 +59,19 @@ QString Packet::deserializeString(ByteBuffer& buffer) {
     return QString::fromUtf8(data);
 }
 
+
+
+
 std::shared_ptr<Packet> Packet::deserialize(const QByteArray& data) {
     ByteBuffer buffer(data);
     /*Читаем тип пакета*/
     qint8 typeValue = buffer.readByte();
-    qDebug() <<"Тип пакета: " <<typeValue;
     /*Читаем размер полезных данных*/
     qint32 usefulDataLength = buffer.readIntLE();
-    qDebug() <<"Размер полезных данных: " <<usefulDataLength;
     /*Читаем CRC*/
     qint32 CRC = buffer.readIntLE();
     /*Читаем полезные данные*/
     QByteArray usefulData = buffer.read(usefulDataLength);
-    qDebug() <<"Сами полезные данные: " <<usefulData;
 
     /*пока без обработки ошибок*/
     if(usefulData.size() !=usefulDataLength )
@@ -84,12 +83,10 @@ std::shared_ptr<Packet> Packet::deserialize(const QByteArray& data) {
      чтобы выполнить сравнение с присланным CRC
     */
     qint32 calcCRC = crcToInt32(usefulData);
-    /*пока без обработки ошибок*/
     if (calcCRC != CRC){
         qDebug() << "Не совпало CRC";
         return nullptr;
     }
-    qDebug() << "совпало CRC";
     PacketType type = static_cast<PacketType>(typeValue);
     std::shared_ptr<Packet> packet;
     switch (type) {
@@ -120,7 +117,6 @@ std::shared_ptr<Packet> Packet::deserialize(const QByteArray& data) {
     if (packet) {
         packet->deserializeData(usefulBuf);
     }
-
     return packet;
 }
 
@@ -129,11 +125,15 @@ std::shared_ptr<Packet> Packet::deserialize(const QByteArray& data) {
 void PacketRegister::serializeData(ByteBuffer& buffer) const {
     Packet::serializeString(buffer, username);
     Packet::serializeString(buffer, password);
+    Packet::serializeString(buffer, first_name);
+    Packet::serializeString(buffer, last_name);
 }
 
 void PacketRegister::deserializeData(ByteBuffer& buffer) {
     username = Packet::deserializeString(buffer);
     password = Packet::deserializeString(buffer);
+    first_name =Packet::deserializeString(buffer);
+    last_name =Packet::deserializeString(buffer);
 }
 
 PacketType PacketRegister::getType() const {
@@ -156,6 +156,22 @@ void PacketRegister::setPassword(const QString &text) {
     password = text;
 }
 
+QString PacketRegister::getFirst_name() const {
+    return first_name;
+}
+
+void PacketRegister::setFirst_name(const QString &text) {
+    first_name = text;
+}
+
+QString PacketRegister::getLast_name() const {
+    return last_name;
+}
+
+void PacketRegister::setLast_name(const QString &text) {
+    last_name = text;
+}
+
 void PacketRegister::handle(PacketHandler* handler) {
     if (handler) {
         handler->handle(*this);
@@ -170,9 +186,7 @@ void PacketAuth::serializeData(ByteBuffer& buffer) const {
 }
 
 void PacketAuth::deserializeData(ByteBuffer& buffer) {
-    qDebug() << "стоп 2";
     username = Packet::deserializeString(buffer);
-    qDebug() << "стоп 2/1";
     password = Packet::deserializeString(buffer);
 }
 
@@ -197,16 +211,18 @@ QString PacketAuth::getPassword() const {
 void PacketAuth::setPassword(const QString &text) {
     password = text;
 }
-/*void PacketRegister::handle(PacketHandler* handler) {
+void PacketAuth::handle(PacketHandler* handler) {
     if (handler) {
         handler->handle(*this);
     }
 }
-*/
+
 
 // --- Реализация класса PacketMessage ---
 
 void PacketMessage::serializeData(ByteBuffer& buffer) const {
+    Packet::serializeString(buffer, firstName);
+    Packet::serializeString(buffer, lastName);
     Packet::serializeString(buffer, from);
     Packet::serializeString(buffer, text);
     Packet::serializeString(buffer, ChatName);
@@ -214,6 +230,8 @@ void PacketMessage::serializeData(ByteBuffer& buffer) const {
 }
 
 void PacketMessage::deserializeData(ByteBuffer& buffer) {
+    firstName = Packet::deserializeString(buffer);
+    lastName = Packet::deserializeString(buffer);
     from = Packet::deserializeString(buffer);
     text = Packet::deserializeString(buffer);
     ChatName = Packet::deserializeString(buffer);
@@ -257,15 +275,28 @@ void PacketMessage::setChatName(const QString &name) {
     ChatName = name;
 }
 
+QString PacketMessage::getFirstName() const {
+    return firstName;
+}
+
+void PacketMessage::setFirstName(const QString &firstName) {
+    this->firstName = firstName;
+}
+
+QString PacketMessage::getLastName() const {
+    return lastName;
+}
+
+void PacketMessage::setLastName(const QString &lastName) {
+    this->lastName = lastName;
+}
+
+
 void PacketMessage::handle(PacketHandler* handler) {
     if (handler) {
         handler->handle(*this);
     }
 }
-
-
-
-
 
 
 // --- Реализация класса PacketServerResponse ---
@@ -290,7 +321,7 @@ void PacketServerResponse::deserializeData(ByteBuffer& buffer) {
     /*читаем байт типа  статуса*/
     Status = static_cast<ServerResponseStatus>(buffer.readByte());
 
-    if (ResponseType == ServerResponseType::Auth && Status == ServerResponseStatus::Success){
+    if (ResponseType == ServerResponseType::Auth && Status == ServerResponseStatus::SuccessUsername){
         salt = Packet::deserializeString(buffer); //если у нас был запрос на авторизацию и сервер нашел пользователя в БД с таким Логином, то значит сервер сразу прислал и соль
     }
 
@@ -332,11 +363,11 @@ void PacketServerResponse::SetResponseMessage(const QString &text) {
     message = text;
 }
 
-/*void PacketMessage::handle(PacketHandler* handler) {
+void PacketServerResponse::handle(PacketHandler* handler) {
     if (handler) {
         handler->handle(*this);
     }
-}*/
+}
 
 /************************************/
 
@@ -359,9 +390,7 @@ void PacketCreateChat::deserializeData(ByteBuffer& buffer) const
 void PacketChatList::serializeData(ByteBuffer& buffer) const
 {
     buffer.writeShortLE(chatNames.size());
-    qDebug() << "Размер: "<< chatNames.size();
     for (const QString& name : chatNames) {
-        qDebug() << "Имя того, что сейчас сереализую" << name ;
         Packet::serializeString(buffer, name);
     }
 }
@@ -375,8 +404,8 @@ void PacketChatList::deserializeData(ByteBuffer& buffer)
     }
 }
 
-/*void PacketMessage::handle(PacketHandler* handler) {
+void PacketChatList::handle(PacketHandler* handler) {
     if (handler) {
         handler->handle(*this);
     }
-}*/
+}

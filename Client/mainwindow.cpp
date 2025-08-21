@@ -3,8 +3,11 @@
 #include "protocol.h"
 #include "Packetrouter.h"
 #include "packethandler.h"
-#include "AuthManager.h"
 #include "Packetrouter.h"
+#include "logger.h"
+#include "SecurityUtils.h"
+#include <QStandardPaths>
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
@@ -12,23 +15,16 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     chatListModel = new QStandardItemModel(this);
-    chatManager = new ChatManager(chatListModel, this);
 
-    //для проверки функционирования чатов
-    chatManager->createChat("Чат 1");
-    chatManager->createChat("Чат 2");
-    chatManager->createChat("Работа");
-    chatManager->createChat("Друзья");
+    QString dbPath = QCoreApplication::applicationDirPath() + "/Messenger.db";
+    chatManager = new ChatManager(dbPath, this);
 
     ui->ChatList->setModel(chatListModel);
 
+
     //сигналы для списка чатов*/
     connect(ui->ChatList, &QListView::clicked, this, &MainWindow::on_ChatList_clicked);
-    connect(chatManager, &ChatManager::chatUpdated, this, [this](const QString& chatName) {
-        if (currentChatName == chatName) {
-            loadChatHistory(chatName);
-        }
-    });
+
 
     // =====================
     /*Создание обработчиков пакетов*/
@@ -46,13 +42,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     /* Создание менеджера сети*/
     managerNetwork = new ManagerNetwork(this);
-    managerNetwork->connectToServer("127.0.0.1", 3333);
-    authManager = new AuthManager(this);
-
-    /* сигналы для авторизации*/
-    connect(authManager, &AuthManager::okAuthUser, this, &MainWindow::handleSuccessfulAuth);
-    connect(authManager, &AuthManager::authFail, this, &MainWindow::handleAuthFailure);
-    connect(authManager, &AuthManager::okRegisterUser, this, &MainWindow::handleSuccessfulRegistration);
+    //managerNetwork->connectToServer("127.0.0.1", 3333);
 
     /*сигнал для получения данных из сети*/
     connect(managerNetwork, &ManagerNetwork::dataReceived, this, &MainWindow::onDataReceived);
@@ -66,6 +56,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(serverResponseHandler, &PacketServerResponseHandler::authFailed,
             this, &MainWindow::handleAuthFailure);
+
+    connect(serverResponseHandler, &PacketServerResponseHandler::RegisterFailed,
+            this, &MainWindow::handleRegisterFailed);
 
     /*сигнал для получения сообщений*/
     connect(messageHandler, &PacketMessageHandler::messageReceived,
@@ -88,6 +81,12 @@ MainWindow::MainWindow(QWidget *parent)
         Q_UNUSED(index);
         ui->Error_Label_Register_Page->clear();
     });
+
+    connect(chatManager, &ChatManager::chatUpdated, this, [this](const QString& chatName) {
+        if (currentChatName == chatName) {
+            loadChatHistory(chatName);
+        }
+    });
 }
 
 MainWindow::~MainWindow() {
@@ -95,17 +94,21 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::on_AuthPahe1PushButton_clicked() {
+    Logger& logger = Logger::getInstance();
     username = ui->login->text();
     QString password = ui->password->text();
 
     if (username.isEmpty() || password.isEmpty()) {
+        logger.log(QtWarningMsg, "Попытка авторизации без заполнения логина или пароля.");
         ui->ErrorLabel->setText("Введите логин и пароль");
         return;
     }
 
     PacketAuth packet;
     packet.setUsername(username);
-    packet.setPassword("");
+    packet.setPassword(password);
+    logger.log(QtInfoMsg, "Попытка подключения к серверу для авторизации");
+    managerNetwork->connectToServer("127.0.0.1", 3333);
     managerNetwork->sendPacket(packet.serialize());
 }
 
@@ -114,8 +117,7 @@ void MainWindow::on_SaltReceived(const QString &salt) {
 
     QString username = ui->login->text();
     QString password = ui->password->text();
-
-    QString hash = authManager->getHashPassword(password, salt);
+    QString hash = SecurityUtils::hashPassword(password, salt);
 
     PacketAuth packet;
     packet.setUsername(username);
@@ -125,12 +127,19 @@ void MainWindow::on_SaltReceived(const QString &salt) {
 }
 
 void MainWindow::handleSuccessfulAuth() {
-    qDebug() << "Авторизация успешна";
-    ui->stackedWidget->setCurrentIndex(3);
+    ui->stackedWidget->setCurrentIndex(1);
     ui->ErrorLabel->clear();
+
+    PacketChatList packet;
+    managerNetwork->sendPacket(packet.serialize());
 }
 
 void MainWindow::handleAuthFailure(const QString &message) {
+    ui->ErrorLabel->setText(message);
+}
+
+
+void MainWindow::handleRegisterFailed(const QString &message) {
     ui->Error_Label_Register_Page->setText(message);
 }
 
@@ -146,12 +155,13 @@ void MainWindow::on_RegisterPage1PushButton_2_clicked() {
 
 void MainWindow::on_RegisterButton_clicked() {
     QString username = ui->Text_Login_RegisterPage->text();
+    QString firstName = ui->firstName->text();
+    QString lastName = ui->lastName->text();
     QString password1 = ui->Text_Password1_RegisterPage->text();
     QString password2 = ui->Text_Password2_RegisterPage->text();
 
-    qDebug() << "Получены данные с полей";
 
-    if (username.isEmpty() || password1.isEmpty() || password2.isEmpty()) {
+    if (username.isEmpty() || firstName.isEmpty() || lastName.isEmpty() || password1.isEmpty() || password2.isEmpty()) {
         ui->Error_Label_Register_Page->setText("Заполните все поля");
         return;
     }
@@ -164,9 +174,16 @@ void MainWindow::on_RegisterButton_clicked() {
     PacketRegister registerPacket;
     registerPacket.setUsername(username);
     registerPacket.setPassword(password1);
+    registerPacket.setFirst_name(firstName);
+    registerPacket.setLast_name(lastName);
 
+    managerNetwork->connectToServer("127.0.0.1", 3333);
     QByteArray serializedRegister = registerPacket.serialize();
     managerNetwork->sendPacket(serializedRegister);
+
+    ui->stackedWidget->setCurrentIndex(0);
+    this->adjustSize();
+
 }
 
 void MainWindow::handleSuccessfulRegistration() {
@@ -186,18 +203,24 @@ void MainWindow::on_ChatList_clicked(const QModelIndex& index) {
 }
 
 void MainWindow::loadChatHistory(const QString& chatName) {
-    auto chat = chatManager->getChat(chatName);
-    if (!chat) {
-        qWarning() << "Чат не найден:" << chatName;
+    Chat* chat = chatManager->getChat(chatName);
+    if (chat->getName() == nullptr) {
         return;
     }
 
     ui->textBrowser->clear();
 
+
+
     const auto& messages = chat->getMessages();
     for (const auto& msg : messages) {
-        QString messageText = QString("<b>[%1]</b> <i>%2:</i> %3")
-        .arg(msg->getTimestamp().toString("dd-hh:mm"), msg->getSender(), msg->getText());
+        QString messageText = QString("<b>[%1]</b> <i>%2 %3(%4):</i> %5")
+        .arg(msg.getTimestamp().toString("dd-hh:mm"),
+             msg.getFirstName(),
+             msg.getLastName(),
+             msg.getSender(),
+             msg.getText());
+
         ui->textBrowser->append(messageText);
     }
 }
@@ -207,33 +230,31 @@ void MainWindow::on_SendMessageButton_clicked() {
     if (text.isEmpty() || currentChatName.isEmpty()) {
         return;
     }
-
-    chatManager->addMessageToChat(currentChatName, username, text, QDateTime::currentDateTime());
-    ui->MessageInput->clear();
-    loadChatHistory(currentChatName);
-
     PacketMessage mes;
     mes.setChatName(currentChatName);
     mes.setFrom(username);
     mes.setText(text);
+
+    managerNetwork->sendPacket(mes.serialize());
+    ui->MessageInput->clear();
 }
 
-void MainWindow::onMessageReceived(const QString& chatName, const QString& sender, const QString& text, const QDateTime& timestamp) {
-    chatManager->addMessageToChat(chatName, sender, text, timestamp);
+void MainWindow::onMessageReceived(const QString& firstName,const QString& lastName, const QString& chatName, const QString& sender, const QString& text, const QDateTime& timestamp) {
+    chatManager->addMessageToChat(chatName, sender, text, timestamp, firstName, lastName);
         if (currentChatName == chatName) {
         loadChatHistory(chatName);
     }
 }
 
-/*Обнавление списка чатов, emit chatListReceived */
 void MainWindow::onChatListReceived(const QStringList& chatList) {
     chatListModel->clear();
     for (const QString& chatName : chatList) {
         chatManager->createChat(chatName);
+        QStandardItem* item = new QStandardItem(chatName);
+        chatListModel->appendRow(item);
     }
 }
 
-/*передача данных в маршрутизатор пакетов*/
 void MainWindow::onDataReceived(const QByteArray& data) {
     packetRouter->routePacket(data);
 }
@@ -259,4 +280,17 @@ void MainWindow::on_Text_Password2_RegisterPage_textChanged(const QString &arg1)
 }
 
 void MainWindow::on_ChatList_indexesMoved(const QModelIndexList &indexes) {
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    Logger& logger = Logger::getInstance();
+
+    logger.log(QtInfoMsg, "Пользователь инициировал закрытие приложения.");
+
+
+    if (managerNetwork && managerNetwork->isConnected()) {
+        managerNetwork->disconnectFromServer();
+    }
+
+    event->accept();
 }

@@ -9,21 +9,29 @@
 /**
  * @brief Класс Chat представляет собой модель чата.
  *
- * Класс управляет списком сообщений в чате и предоставляет методы для добавления новых сообщений
- * Каждое сообщение представлено объектом класса Message,
- * который хранится в виде умного указателя (std::shared_ptr).
+ * Класс управляет списком сообщений и предоставляет методы для работы с ними.
  */
 
 class Chat {
 private:
-    QString name;
-    QList<std::shared_ptr<Message>> messages; /*Список сообщений*/
+    QString name;          /*Имя чата*/
+    QList<Message> messages; /* Список сообщений в чате*/
 
 public:
+    /**
+     * @brief Конструктор класса Chat.
+     * @param chatName Имя чата.
+     */
     Chat(const QString& chatName);
-    void addMessage(const QString& sender, const QString& text, const QDateTime& timestamp);
-    const QList<std::shared_ptr<Message>>& getMessages() const;
+
+    void addMessage(const QString& sender, const QString& text, const QDateTime& timestamp,
+                    const QString& firstName, const QString& lastName);
+
+    const QList<Message>& getMessages() const;
+
     QString getName() const;
+
     ~Chat() = default;
 };
+
 #endif // CHAT_H
